@@ -1,6 +1,7 @@
 from GoogleAPI import GoogleAPI
-
-
+from googleapiclient.http import MediaIoBaseDownload
+from SheetsAPI import SheetsAPI
+import io
 class Drive:
     def __init__(self):
         api = GoogleAPI('drive')
@@ -8,14 +9,14 @@ class Drive:
     def getFilesList(self):
         service = self.service
         try:
-            results = service.files().list(pageSize=100, fields="nextPageToken, files(id, name)").execute()
+            results = service.files().list(pageSize=1000, fields="nextPageToken, files(id, name)").execute()
             items = results.get('files', [])
             return items
         except Exception as e:
             print("Something went wrong!")
             return None
 
-    def createFolders(self, name = 'folders', parent = []):
+    def createFolder(self, name = 'folders', parent = []):
         #folders ở đây được coi như 1 file
         #tạo metadata cho file với name bằng name truyền vào, mimeType là thuộc tính của file ở đây đối với folders thì mặc định là  'application/vnd.google-apps.folder'
         #Hàm sẽ return file đã tạo để thực hiện một số công việc khác trong Flask nếu có, không thì bỏ việc return bằng cách _ = obj.createFolders(name,parent)
@@ -24,11 +25,23 @@ class Drive:
         metadata = {
             'name': name,
             'mimeType': 'application/vnd.google-apps.folder',
-            'parent': parent
+            'parents': parent
         }
         file = service.files().create(body=metadata, fields = 'id').execute()
         print ('Folder ID: {}'.format(file.get('id')))
         return file
+    def createFolderTree(self, name = 'untitled'):
+        SPREADSHEET_ID = "1UnFOh4in0gWz9_qmsoW16Pl2QsJDi04CPgLrn9vGvZw"
+        sheets = SheetsAPI(SPREADSHEET_ID)
+        students = sheets.getStudentList()
+        # students = ['Votiendung','Caothienhuan','Vuduchuy']
+        parent = self.createFolder(name = name)
+        parent_id = parent.get('id')
+        print(parent_id)
+        for student in students:
+            self.createFolder(name=student,parent = [parent_id])
+
+
     def insertResultFileToFolders(self,folder):
         folder_id = folder.get('id')
         metadata = {
@@ -59,15 +72,21 @@ class Drive:
         pass
     def downloadFile(self, file):
         #Hàm dùng để download một file nhưng chả biết nó sẽ lưu ở đâu trên server cả :) ? Cái này chắc nhờ anh quá :v em thì chịu đấy :)))
-
+        type = file.get('mimeType')
         file_id = file.get('id')
-        request = self.service.files().get_media(fileId=file_id)
+        try:
+            request = self.service.files().get_media(fileId=file_id)
+        except:
+            request = self.service.files().get_media(fileId=file_id)
+        finally:
+            print('Can not recognize mimeType')
+            return None
+
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
         done = False
         while done is False:
             status, done = downloader.next_chunk()
             print("Download %d%%." % int(status.progress() * 100))
-
     def getChange(self):
         pass
