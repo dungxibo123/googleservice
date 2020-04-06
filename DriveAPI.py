@@ -8,27 +8,66 @@ class Drive:
     def getFilesList(self):
         service = self.service
         try:
-            results = service.files().list(pageSize=10000, fields="nextPageToken, files(id, name)").execute()
+            results = service.files().list(pageSize=100, fields="nextPageToken, files(id, name)").execute()
             items = results.get('files', [])
             return items
         except Exception as e:
             print("Something went wrong!")
             return None
 
-    def createFolders(self, name = 'folders'):
-        metadata = {
-            'name': name
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        file = self.service.files().create(body=metadata, fields = 'id').execute()
-        print ('Folder ID: {}'.format(file.get('id')))
-    def insertFileToFolders(self, folder):
-        folder_id = folder.get('id')
-        pass
+    def createFolders(self, name = 'folders', parent = []):
+        #folders ở đây được coi như 1 file
+        #tạo metadata cho file với name bằng name truyền vào, mimeType là thuộc tính của file ở đây đối với folders thì mặc định là  'application/vnd.google-apps.folder'
+        #Hàm sẽ return file đã tạo để thực hiện một số công việc khác trong Flask nếu có, không thì bỏ việc return bằng cách _ = obj.createFolders(name,parent)
 
+        service = self.service
+        metadata = {
+            'name': name,
+            'mimeType': 'application/vnd.google-apps.folder',
+            'parent': parent
+        }
+        file = service.files().create(body=metadata, fields = 'id').execute()
+        print ('Folder ID: {}'.format(file.get('id')))
+        return file
+    def insertResultFileToFolders(self,folder):
+        folder_id = folder.get('id')
+        metadata = {
+            'name': name,
+            'mimeType': 'application/vnd.google-apps.spreadsheet',
+            'parent': [folder_id]
+        }
+        file = self.service.files().create(body=metadata,fields='id').execute()
+        print('File uploaded and inserted in to {}'.format(folder.get('name')))
+        return file
+    def searchFiles(self, name):
+        #result được trả về sẽ là kiểu list mà mỗi phần tử là dạng files.
+        #Trường hợp tìm không thấy sẽ trả về list rỗng, có thể sẽ xảy ra Index out of range, Exception
+        #Hàm này có param là name, tức là search theo tên, trường hợp nhiều file hay folder trùng tên thì nó sẽ trả về nhiều kết quả, cẩn thận khi sử dụng
+
+        queries = "mimeType='application/vnd.google-apps.folder'"
+        spaces = 'drive'
+        reponse = self.service.files().list(q=queries,spaces=spaces,fields='nextPageToken, files(id,name)').execute()
+        filesList = reponse.get('files',[])
+        result = []
+        for file in filesList:
+            if file.get('name') == name:
+                result.append(file)
+        return result
     def uploadFiles(self):
+        #Chắc vẫn sẽ chưa viết vì tình hình là những thứ được upload sẽ là file kết quả, thì files kết quả này là file nên dùng hàm insertResultFileToFolders để có thể uploads thẳng file này lên trên một thư mục nào đó cố định
+        #Nếu cần thì bảo em em viết thêm vào cho nên là khỏi lo ha :v
         pass
-    def downloadFile(self):
-        pass
+    def downloadFile(self, file):
+        #Hàm dùng để download một file nhưng chả biết nó sẽ lưu ở đâu trên server cả :) ? Cái này chắc nhờ anh quá :v em thì chịu đấy :)))
+
+        file_id = file.get('id')
+        request = self.service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            print("Download %d%%." % int(status.progress() * 100))
+
     def getChange(self):
         pass
